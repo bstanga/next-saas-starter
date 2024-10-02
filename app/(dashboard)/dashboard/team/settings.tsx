@@ -1,27 +1,31 @@
-'use client';
+"use client";
 
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { customerPortalAction } from '@/lib/payments/actions';
-import { useActionState } from 'react';
-import { TeamDataWithMembers, User } from '@/lib/db/schema';
-import { removeTeamMember } from '@/app/(login)/actions';
-import { InviteTeamMember } from './invite-team';
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { customerPortalAction } from "@/lib/payments/actions";
+import { useActionState } from "react";
+import { removeTeamMember } from "@/app/(login)/actions";
+import { InviteTeamMember } from "./invite-team";
+import { Team, TeamMember, User } from "@prisma/client";
 
 type ActionState = {
   error?: string;
   success?: string;
 };
 
-export function Settings({ teamData }: { teamData: TeamDataWithMembers }) {
+export function Settings({
+  team,
+}: {
+  team: Team & { members: (TeamMember & { user: User })[] };
+}) {
   const [removeState, removeAction, isRemovePending] = useActionState<
     ActionState,
     FormData
-  >(removeTeamMember, { error: '', success: '' });
+  >(removeTeamMember, { error: "", success: "" });
 
-  const getUserDisplayName = (user: Pick<User, 'id' | 'name' | 'email'>) => {
-    return user.name || user.email || 'Unknown User';
+  const getUserDisplayName = (user: Pick<User, "id" | "name" | "email">) => {
+    return user.name || user.email || "Unknown User";
   };
 
   return (
@@ -36,14 +40,14 @@ export function Settings({ teamData }: { teamData: TeamDataWithMembers }) {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
               <div className="mb-4 sm:mb-0">
                 <p className="font-medium">
-                  Current Plan: {teamData.planName || 'Free'}
+                  Current Plan: {team.planName || "Free"}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {teamData.subscriptionStatus === 'active'
-                    ? 'Billed monthly'
-                    : teamData.subscriptionStatus === 'trialing'
-                      ? 'Trial period'
-                      : 'No active subscription'}
+                  {team.subscriptionStatus === "active"
+                    ? "Billed monthly"
+                    : team.subscriptionStatus === "trialing"
+                    ? "Trial period"
+                    : "No active subscription"}
                 </p>
               </div>
               <form action={customerPortalAction}>
@@ -61,7 +65,7 @@ export function Settings({ teamData }: { teamData: TeamDataWithMembers }) {
         </CardHeader>
         <CardContent>
           <ul className="space-y-4">
-            {teamData.teamMembers.map((member, index) => (
+            {team.members.map((member, index) => (
               <li key={member.id} className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <Avatar>
@@ -71,9 +75,9 @@ export function Settings({ teamData }: { teamData: TeamDataWithMembers }) {
                     />
                     <AvatarFallback>
                       {getUserDisplayName(member.user)
-                        .split(' ')
+                        .split(" ")
                         .map((n) => n[0])
-                        .join('')}
+                        .join("")}
                     </AvatarFallback>
                   </Avatar>
                   <div>
@@ -94,7 +98,7 @@ export function Settings({ teamData }: { teamData: TeamDataWithMembers }) {
                       size="sm"
                       disabled={isRemovePending}
                     >
-                      {isRemovePending ? 'Removing...' : 'Remove'}
+                      {isRemovePending ? "Removing..." : "Remove"}
                     </Button>
                   </form>
                 ) : null}
@@ -106,7 +110,7 @@ export function Settings({ teamData }: { teamData: TeamDataWithMembers }) {
           )}
         </CardContent>
       </Card>
-      <InviteTeamMember />
+      <InviteTeamMember team={team} />
     </section>
   );
 }

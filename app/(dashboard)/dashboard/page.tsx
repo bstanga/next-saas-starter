@@ -1,19 +1,14 @@
-import { redirect } from 'next/navigation';
-import { Settings } from './settings';
-import { getTeamForUser, getUser } from '@/lib/db/queries';
+import { redirect } from "next/navigation";
+import { Settings } from "./team/settings";
+import { getSession } from "@/lib/auth/session";
+import prisma from "@/lib/db/prisma";
+import { Overview } from "./overview";
 
-export default async function SettingsPage() {
-  const user = await getUser();
-
-  if (!user) {
-    redirect('/login');
+export default async function OverviewPage() {
+  const session = await getSession();
+  if (!session) {
+    redirect("/sign-in");
   }
 
-  const teamData = await getTeamForUser(user.id);
-
-  if (!teamData) {
-    throw new Error('Team not found');
-  }
-
-  return <Settings teamData={teamData} />;
+  return <Overview />;
 }

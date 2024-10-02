@@ -1,7 +1,8 @@
-import { z } from 'zod';
-import { TeamDataWithMembers, User } from '@/lib/db/schema';
-import { getTeamForUser, getUser } from '@/lib/db/queries';
-import { redirect } from 'next/navigation';
+import { z } from "zod";
+import { Team, User, UserRole } from "@prisma/client";
+import prisma from "@/lib/db/prisma";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth/session";
 
 export type ActionState = {
   error?: string;
@@ -39,9 +40,18 @@ export function validatedActionWithUser<S extends z.ZodType<any, any>, T>(
   action: ValidatedActionWithUserFunction<S, T>
 ) {
   return async (prevState: ActionState, formData: FormData): Promise<T> => {
-    const user = await getUser();
+    const session = await getSession();
+    if (!session) {
+      throw new Error("User is not authenticated");
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        id: session.userId,
+      },
+    });
     if (!user) {
-      throw new Error('User is not authenticated');
+      throw new Error("User not found");
     }
 
     const result = schema.safeParse(Object.fromEntries(formData));
@@ -53,23 +63,38 @@ export function validatedActionWithUser<S extends z.ZodType<any, any>, T>(
   };
 }
 
-type ActionWithTeamFunction<T> = (
+type ActionWithAuthFunction<T> = (
   formData: FormData,
-  team: TeamDataWithMembers
+  authData: {
+    user: User;
+    userRole: UserRole;
+    team: Team;
+  }
 ) => Promise<T>;
 
-export function withTeam<T>(action: ActionWithTeamFunction<T>) {
+export function withAuth<T>(action: ActionWithAuthFunction<T>) {
   return async (formData: FormData): Promise<T> => {
-    const user = await getUser();
-    if (!user) {
-      redirect('/sign-in');
+    const session = await getSession();
+    if (!session) {
+      return redirect("/sign-in");
     }
 
-    const team = await getTeamForUser(user.id);
-    if (!team) {
-      throw new Error('Team not found');
+    const [user, team] = await Promise.all([
+      prisma.user.findFirst({
+        where: {
+          id: session.userId,
+        },
+      }),
+      prisma.team.findFirst({
+        where: {
+          id: session.teamId,
+        },
+      }),
+    ]);
+    if (!user || !team) {
+      return redirect("/sign-in");
     }
 
-    return action(formData, team);
+    return action(formData, { user, team, userRole: session.userRole });
   };
 }

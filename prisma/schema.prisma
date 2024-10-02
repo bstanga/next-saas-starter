@@ -1,0 +1,107 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("POSTGRES_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String?   @db.VarChar(100)
+  email        String    @unique @db.VarChar(255)
+  passwordHash String?
+  githubId     String?   @unique
+  googleId     String?   @unique
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+  deletedAt    DateTime?
+
+  teams        TeamMember[]
+  invitations  Invitation[]  @relation("InvitedBy")
+  activityLogs ActivityLog[]
+}
+
+model Team {
+  id                   String   @id @default(cuid())
+  name                 String   @db.VarChar(100)
+  stripeCustomerId     String?  @unique
+  stripeSubscriptionId String?  @unique
+  stripeProductId      String?
+  planName             String?  @db.VarChar(50)
+  subscriptionStatus   String?  @db.VarChar(20)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @default(now()) @updatedAt
+
+  members      TeamMember[]
+  activityLogs ActivityLog[]
+  invitations  Invitation[]
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  userId    String
+  teamId    String
+  role      UserRole
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  team Team @relation(fields: [teamId], references: [id])
+}
+
+enum ActivityType {
+  EMAIL_SIGN_UP
+  LINK_GITHUB_ACCOUNT
+  LINK_GOOGLE_ACCOUNT
+  EMAIL_SIGN_IN
+  GITHUB_SIGN_IN
+  GOOGLE_SIGN_IN
+  SIGN_OUT
+  UPDATE_PASSWORD
+  DELETE_ACCOUNT
+  UPDATE_ACCOUNT
+  CREATE_TEAM
+  REMOVE_TEAM_MEMBER
+  INVITE_TEAM_MEMBER
+  ACCEPT_INVITATION
+}
+
+model ActivityLog {
+  id        String       @id @default(cuid())
+  teamId    String
+  userId    String?
+  action    ActivityType
+  ipAddress String?      @db.VarChar(45)
+  createdAt DateTime     @default(now())
+
+  team Team  @relation(fields: [teamId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
+}
+
+enum UserRole {
+  MEMBER
+  ADMIN
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model Invitation {
+  id        String           @id @default(cuid())
+  teamId    String
+  invitedBy String
+  email     String           @db.VarChar(255)
+  role      UserRole
+  status    InvitationStatus
+  createdAt DateTime         @default(now())
+
+  team    Team @relation(fields: [teamId], references: [id])
+  inviter User @relation("InvitedBy", fields: [invitedBy], references: [id])
+}

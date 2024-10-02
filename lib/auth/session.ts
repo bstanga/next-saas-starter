@@ -1,7 +1,8 @@
-import { compare, hash } from 'bcryptjs';
-import { SignJWT, jwtVerify } from 'jose';
-import { cookies } from 'next/headers';
-import { NewUser } from '@/lib/db/schema';
+import { compare, hash } from "bcryptjs";
+import { SignJWT, jwtVerify } from "jose";
+import { cookies } from "next/headers";
+import { UserRole } from "@prisma/client";
+import prisma from "@/lib/db/prisma";
 
 const key = new TextEncoder().encode(process.env.AUTH_SECRET);
 const SALT_ROUNDS = 10;
@@ -17,43 +18,75 @@ export async function comparePasswords(
   return compare(plainTextPassword, hashedPassword);
 }
 
-type SessionData = {
-  user: { id: number };
-  expires: string;
+type UserData = {
+  userId: string;
+  teamId: string;
+  userRole: UserRole;
 };
+
+type SessionData = UserData & { expires: string };
 
 export async function signToken(payload: SessionData) {
   return await new SignJWT(payload)
-    .setProtectedHeader({ alg: 'HS256' })
+    .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime('1 day from now')
+    .setExpirationTime("1 day from now")
     .sign(key);
 }
 
 export async function verifyToken(input: string) {
   const { payload } = await jwtVerify(input, key, {
-    algorithms: ['HS256'],
+    algorithms: ["HS256"],
   });
   return payload as SessionData;
 }
 
-export async function getSession() {
-  const session = cookies().get('session')?.value;
-  if (!session) return null;
+export async function getSession(): Promise<SessionData | null> {
+  const session = cookies().get("session")?.value;
+  if (!session) {
+    return null;
+  }
   return await verifyToken(session);
 }
 
-export async function setSession(user: NewUser) {
+export async function updateSession(userData: UserData) {
+  const exstingSession = await getSession();
+  if (!exstingSession) {
+    return setSession(userData);
+  }
+  const session = { ...userData, expires: exstingSession!.expires };
+  const encryptedSession = await signToken(session);
+  cookies().set("session", encryptedSession, {
+    expires: new Date(exstingSession!.expires),
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+  });
+}
+
+export async function setSession(userData: UserData) {
   const expiresInOneDay = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const session: SessionData = {
-    user: { id: user.id! },
+    ...userData,
     expires: expiresInOneDay.toISOString(),
   };
   const encryptedSession = await signToken(session);
-  cookies().set('session', encryptedSession, {
+  cookies().set("session", encryptedSession, {
     expires: expiresInOneDay,
     httpOnly: true,
     secure: true,
-    sameSite: 'lax',
+    sameSite: "lax",
   });
+}
+
+export async function getUser() {
+  const session = await getSession();
+  if (!session?.userId) {
+    return null;
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { id: session!.userId },
+  });
+  return user;
 }
